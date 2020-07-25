@@ -15,8 +15,10 @@ function isEmail(email) {
   );
 }
 
-function matches(value, key, schema) {
-  return value === schema[key];
+function matches(key) {
+  return function (value, context) {
+    return value === context[key];
+  };
 }
 
 function length(min = 0, max = Infinity) {
@@ -25,7 +27,7 @@ function length(min = 0, max = Infinity) {
   };
 }
 
-const schema = {
+const signupFormSchema = {
   username: [
     { validator: notEmpty, message: "Username cannot be empty" },
     {
@@ -44,74 +46,57 @@ const schema = {
       message: "Password should be at least 8 characters",
     },
   ],
-  password2: [{ validator: notEmpty, message: "Password cannot be empty" }],
+  password2: [
+    { validator: notEmpty, message: "Password cannot be empty" },
+    { validator: matches("password"), message: "Passwords have to match" },
+  ],
 };
 
 function validate(schema, values) {
+  console.log(schema, values);
+  console.log(Object.entries(schema));
   const entries = Object.entries(schema).map(([propertyName, validators]) => [
     propertyName,
     validators
-      .filter((validator) => !validator.validator(values[propertyName]))
+      .filter(({ validator }) => !validator(values[propertyName], values))
       .map(({ message }) => message),
   ]);
+  console.log(entries);
   return Object.fromEntries(entries);
 }
 
 function getValuesObj(form) {
   const formData = new FormData(form);
-  return Object.fromEntries(formData.entries());
+  return Object.fromEntries(formData.entries()); // ???
 }
 
 function hasErrors(errors) {
-  return Object.entries(errors).some(([key, value]) => value);
+  return Object.entries(errors).some(([key, value]) => value.length);
 }
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
-
-  const errors = validate(schema, getValuesObj(e.target));
+  const values = getValuesObj(e.target);
+  const errors = validate(signupFormSchema, values);
 
   renderErrors(errors);
-  console.log(errors);
-  console.log(hasErrors(errors));
   if (!hasErrors(errors)) {
     window.location = "/welcome.html";
   }
 });
 
 function renderErrors(errors) {
-  if (errors.username.length) {
-    setErrorFor(username, errors.username);
-  } else {
-    setSuccessFor(username);
-  }
-
-  if (errors.email.length) {
-    setErrorFor(email, errors.email);
-    // } else if (!isEmail(emailValue)) {
-    // setErrorFor(email, "Email is not valid");
-  } else {
-    setSuccessFor(email);
-  }
-
-  if (errors.password.length) {
-    setErrorFor(password, errors.password);
-  } else {
-    setSuccessFor(password);
-  }
-
-  if (errors.password2.length) {
-    setErrorFor(password2, errors.password2);
-    // } else if (passwordTwoValue !== passwordValue) {
-    //   setErrorFor(password2, "Passwords do not match");
-  } else {
-    setSuccessFor(password2);
-  }
+  Object.entries(errors).forEach(([key, messages]) => {
+    if (messages.length) {
+      setErrorFor(fields[key], messages);
+    } else {
+      setSuccessFor(fields[key]);
+    }
+  });
 }
 
 function setErrorFor(input, message) {
   const firstMsg = message[0];
-  // TODO: handle multiple error messages
   const formControl = input.parentElement; // .form-control
   const small = formControl.querySelector("small");
   // add error message inside small tag
@@ -127,7 +112,10 @@ function setSuccessFor(input) {
 
 function renderLiveUpdate(event) {
   const name = event.target.name;
-  const errors = validate({[name]: schema[name]}, { [name]: event.target.value });
+  const errors = validate(
+    { [name]: signupFormSchema[name] },
+    getValuesObj(form)
+  );
   if (errors[name].length) {
     setErrorFor(fields[name], errors[name]);
   } else {
@@ -135,21 +123,5 @@ function renderLiveUpdate(event) {
   }
 }
 
-// live update UI
-username.addEventListener("keyup", renderLiveUpdate);
-
-password.addEventListener("keyup", renderLiveUpdate);
- 
-// TODO: add new add maches validator
-password2.addEventListener("keyup", function (e) {
-  e.target = password2.value;
-  if (password2.value === "") {
-    setErrorFor(password2, "Password cannot be empty");
-  } else if (password.value !== password2.value) {
-    setErrorFor(password2, "Passwords do not match");
-  } else {
-    setSuccessFor(password2);
-  }
-});
-
-email.addEventListener("keyup", renderLiveUpdate);
+//live ui update
+form.addEventListener("keyup", renderLiveUpdate);
